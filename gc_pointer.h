@@ -100,59 +100,116 @@ bool Pointer<T, size>::first = true;
 
 // Constructor for both initialized and uninitialized objects. -> see class interface
 template<class T,int size>
-Pointer<T,size>::Pointer(T *t){
+Pointer<T,size>::Pointer(T *t):addr(t), isArray(size > 0), arraySize(size){
     // Register shutdown() as an exit function.
     if (first)
         atexit(shutdown);
     first = false;
-
-    // TODO: Implement Pointer constructor
-    // Lab: Smart Pointer Project Lab
-
+    
+    // Construct PtrDetails with information about memory block.
+    typename std::list<PtrDetails<T> >::iterator p = findPtrInfo(t);
+    if (p == refContainer.end()) {
+        refContainer.push_back(PtrDetails<T> (t, size));
+    } else {
+        p->refcount++;
+    }
 }
 // Copy constructor.
 template< class T, int size>
 Pointer<T,size>::Pointer(const Pointer &ob){
-
-    // TODO: Implement Pointer constructor
-    // Lab: Smart Pointer Project Lab
-
+    typename std::list<PtrDetails<T> >::iterator p;
+    p = findPtrInfo(ob.addr);
+    p->refcount++; // increment ref count
+    addr = ob.addr;
+    arraySize = ob.arraySize;
+    // decide whether it is an array
+    if (arraySize > 0)
+        isArray = true;
+    else
+        isArray = false;      
 }
 
 // Destructor for Pointer.
 template <class T, int size>
 Pointer<T, size>::~Pointer(){
-
-    // TODO: Implement Pointer destructor
-    // Lab: New and Delete Project Lab
+    typename std::list<PtrDetails<T> >::iterator p;
+    p = findPtrInfo(addr);
+    
+    if (p->refcount)
+        p->refcount--;
+    
+    // Collect garbage when a pointer goes out of scope.
+    collect();
 }
 
 // Collect garbage. Returns true if at least
 // one object was freed.
 template <class T, int size>
 bool Pointer<T, size>::collect(){
-
-    // TODO: Implement collect function
-    // LAB: New and Delete Project Lab
-    // Note: collect() will be called in the destructor
-    return false;
+    bool memfreed = false;
+    typename std::list<PtrDetails<T> >::iterator p;
+    do{
+        // Scan refContainer looking for unreferenced pointers.
+        for (p = refContainer.begin(); p != refContainer.end(); p++){
+            if (p->refcount > 0)
+                continue;
+            memfreed = true;
+            // Remove unused entry from refContainer.
+            refContainer.remove(*p);
+            // Free memory unless the Pointer is null.
+            if (p->memPtr){
+                if (p->isArray){
+                    delete[] p->memPtr; // delete array
+                }
+                else{
+                    delete p->memPtr; // delete single element
+                }
+            }
+            // Restart the search.
+            break;
+        }
+    } while (p != refContainer.end());
+    return memfreed;
 }
 
 // Overload assignment of pointer to Pointer.
 template <class T, int size>
 T *Pointer<T, size>::operator=(T *t){
-
-    // TODO: Implement operator==
-    // LAB: Smart Pointer Project Lab
-
+    typename std::list<PtrDetails<T> >::iterator p;
+    // First, decrement the reference count
+    // for the memory currently being pointed to.
+    p = findPtrInfo(addr);
+    p->refcount--;
+    // Then, increment the reference count of
+    // the new address.
+    
+    p = findPtrInfo(t);
+    if (p == refContainer.end()) {
+        refContainer.push_back(PtrDetails<T> (t, size));
+    } else {
+        p->refcount++;
+    }
+    addr = t; // store the address.
+    isArray = p->isArray;
+    arraySize = p->arraySize;
+    return t;
 }
 // Overload assignment of Pointer to Pointer.
 template <class T, int size>
 Pointer<T, size> &Pointer<T, size>::operator=(Pointer &rv){
-
-    // TODO: Implement operator==
-    // LAB: Smart Pointer Project Lab
-
+    typename std::list<PtrDetails<T> >::iterator p;
+    // First, decrement the reference count
+    // for the memory currently being pointed to.
+    p = findPtrInfo(addr);
+    p->refcount--;
+    // Then, increment the reference count of
+    // the new address.
+    p = findPtrInfo(rv.addr);
+    p->refcount++;  // increment ref count
+    addr = rv.addr; // store the address.
+    isArray = p->isArray;
+    arraySize = p->arraySize;
+    return rv;
 }
 
 // A utility function that displays refContainer.
